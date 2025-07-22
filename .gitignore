@@ -7,6 +7,9 @@ dev-resources/
 # Other git repositories
 Dashboard-Legacy/
 
+# Hidden folders and files starting with dot
+.*/
+
 # IDE files
 .vscode/
 .idea/
