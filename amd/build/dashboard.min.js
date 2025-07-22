@@ -1,15 +1,23 @@
-define(['jquery', 'core/ajax'], function($, Ajax) {
+define(['core/ajax'], function(Ajax) {
     'use strict';
     
     var initialized = false;
     var draggedElement = null;
     var config = { blocks: {}, creation: { courses: [], categories: [], links: [] } };
     
+    // Helper function for safe element matching
+    function elementMatches(element, selector) {
+        return element && 
+               element.nodeType === 1 && 
+               element.matches && 
+               element.matches(selector);
+    }
+    
     function init() {
         if (initialized) return;
         initialized = true;
         
-        console.log('🚀 Initializing clean dashboard');
+        console.log('🚀 Initializing dashboard (vanilla JS)');
         
         setupEventHandlers();
         setupDragAndDrop();
@@ -19,15 +27,28 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
     
     function setupEventHandlers() {
         // Create buttons
-        $('#create-category').on('click', createCategory);
-        $('#create-link').on('click', createLink);
+        const createCategoryBtn = document.getElementById('create-category');
+        const createLinkBtn = document.getElementById('create-link');
         
-        // Edit functionality
-        $(document).on('dblclick', '.editable', enableEdit);
-        $(document).on('blur', '.editable', saveEdit);
-        $(document).on('keydown', '.editable', function(e) {
-            if (e.key === 'Enter') {
-                $(this).blur();
+        if (createCategoryBtn) createCategoryBtn.addEventListener('click', createCategory);
+        if (createLinkBtn) createLinkBtn.addEventListener('click', createLink);
+        
+        // Edit functionality with event delegation
+        document.addEventListener('dblclick', function(e) {
+            if (elementMatches(e.target, '.editable')) {
+                enableEdit(e);
+            }
+        });
+        
+        document.addEventListener('blur', function(e) {
+            if (elementMatches(e.target, '.editable')) {
+                saveEdit(e);
+            }
+        }, true); // Use capture for blur events
+        
+        document.addEventListener('keydown', function(e) {
+            if (elementMatches(e.target, '.editable') && e.key === 'Enter') {
+                e.target.blur();
             }
         });
     }
@@ -36,83 +57,101 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
         console.log('📱 Setting up universal drag & drop');
         
         // Make elements draggable
-        $(document).on('mousedown', '.element, .category', function() {
-            $(this).attr('draggable', true);
+        document.addEventListener('mousedown', function(e) {
+            if (elementMatches(e.target, '.element, .category')) {
+                e.target.setAttribute('draggable', 'true');
+            }
         });
         
         // Drag start
-        $(document).on('dragstart', '.element, .category', function(e) {
-            e.stopPropagation();
-            draggedElement = this;
-            $(this).addClass('dragging');
-            console.log('🔥 DRAGSTART:', this.textContent.trim());
+        document.addEventListener('dragstart', function(e) {
+            if (elementMatches(e.target, '.element, .category')) {
+                e.stopPropagation();
+                draggedElement = e.target;
+                e.target.classList.add('dragging');
+                console.log('🔥 DRAGSTART:', e.target.textContent.trim());
+            }
         });
         
         // Drag end
-        $(document).on('dragend', '.element, .category', function() {
-            $(this).removeClass('dragging');
-            $('.drop-target').removeClass('drop-target');
-            draggedElement = null;
-            console.log('🏁 DRAGEND');
+        document.addEventListener('dragend', function(e) {
+            if (elementMatches(e.target, '.element, .category')) {
+                e.target.classList.remove('dragging');
+                // Remove drop-target class from all elements
+                const dropTargets = document.querySelectorAll('.drop-target');
+                dropTargets.forEach(el => el.classList.remove('drop-target'));
+                draggedElement = null;
+                console.log('🏁 DRAGEND');
+            }
         });
         
         // Drop zones - ONLY use data-drop-zone to avoid duplicates
-        $(document).on('dragover', '[data-drop-zone]', function(e) {
+        document.addEventListener('dragover', function(e) {
+            const target = e.target.closest('[data-drop-zone]');
+            if (!target) return;
+            
             e.preventDefault();
             e.stopPropagation();
             
             if (!draggedElement) return;
             
-            var isValidDrop = validateDrop(draggedElement, this);
+            var isValidDrop = validateDrop(draggedElement, target);
             if (isValidDrop) {
-                $(this).addClass('drop-target');
-                console.log('🌊 DRAGOVER valid to zone:', $(this).data('drop-zone'));
+                target.classList.add('drop-target');
+                console.log('🌊 DRAGOVER valid to zone:', target.dataset.dropZone);
             }
         });
         
-        $(document).on('dragleave', '[data-drop-zone]', function(e) {
+        document.addEventListener('dragleave', function(e) {
+            const target = e.target.closest('[data-drop-zone]');
+            if (!target) return;
+            
             e.stopPropagation();
             // Only remove if really leaving
-            var rect = this.getBoundingClientRect();
+            var rect = target.getBoundingClientRect();
             if (e.clientX < rect.left || e.clientX > rect.right || 
                 e.clientY < rect.top || e.clientY > rect.bottom) {
-                $(this).removeClass('drop-target');
+                target.classList.remove('drop-target');
             }
         });
         
-        $(document).on('drop', '[data-drop-zone]', function(e) {
+        document.addEventListener('drop', function(e) {
+            const target = e.target.closest('[data-drop-zone]');
+            if (!target) return;
+            
             e.preventDefault();
             e.stopPropagation();
             
             if (!draggedElement) return;
             
-            var targetZone = $(this).data('drop-zone');
-            var elementId = $(draggedElement).data('id') || $(draggedElement).text().trim();
+            var targetZone = target.dataset.dropZone;
+            var elementId = draggedElement.dataset.id || draggedElement.textContent.trim();
+            var fromParent = draggedElement.parentElement;
             
             console.log('🎯 DROP EVENT:', {
                 element: elementId,
-                fromParent: $(draggedElement).parent().data('drop-zone') || 'no-zone',
+                fromParent: fromParent.dataset.dropZone || 'no-zone',
                 toZone: targetZone,
-                targetElement: this.tagName + (this.className ? '.' + this.className : ''),
-                elementsBefore: $(this).children().length
+                targetElement: target.tagName + (target.className ? '.' + target.className : ''),
+                elementsBefore: target.children.length
             });
             
-            var isValidDrop = validateDrop(draggedElement, this);
+            var isValidDrop = validateDrop(draggedElement, target);
             if (isValidDrop) {
                 // Log DOM before
                 console.log('📋 DOM BEFORE:', {
-                    fromChildren: $(draggedElement).parent().children().length,
-                    toChildren: $(this).children().length
+                    fromChildren: fromParent.children.length,
+                    toChildren: target.children.length
                 });
                 
-                $(this).append(draggedElement);
-                $(this).removeClass('drop-target');
+                target.appendChild(draggedElement);
+                target.classList.remove('drop-target');
                 
                 // Log DOM after
                 console.log('📋 DOM AFTER:', {
-                    fromChildren: $(draggedElement).parent().children().length,
-                    toChildren: $(this).children().length,
-                    elementMoved: $(draggedElement).parent().data('drop-zone') === targetZone
+                    fromChildren: fromParent.children.length,
+                    toChildren: target.children.length,
+                    elementMoved: draggedElement.parentElement.dataset.dropZone === targetZone
                 });
                 
                 saveConfiguration();
@@ -124,8 +163,8 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
     }
     
     function validateDrop(element, target) {
-        var elementType = $(element).hasClass('category') ? 'category' : 'element';
-        var targetZone = $(target).data('drop-zone');
+        var elementType = element.classList.contains('category') ? 'category' : 'element';
+        var targetZone = target.dataset.dropZone;
         
         console.log('🔍 Validating drop:', elementType, 'to zone:', targetZone);
         
@@ -157,7 +196,10 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
             </div>
         `;
         
-        $('[data-drop-zone="creation-categories"]').append(categoryHtml);
+        const creationCategories = document.querySelector('[data-drop-zone="creation-categories"]');
+        if (creationCategories) {
+            creationCategories.insertAdjacentHTML('beforeend', categoryHtml);
+        }
         saveConfiguration();
         console.log('✅ Created category:', name);
     }
@@ -177,29 +219,32 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
             </div>
         `;
         
-        $('[data-drop-zone="creation-links"]').append(linkHtml);
+        const creationLinks = document.querySelector('[data-drop-zone="creation-links"]');
+        if (creationLinks) {
+            creationLinks.insertAdjacentHTML('beforeend', linkHtml);
+        }
         saveConfiguration();
         console.log('✅ Created link:', name);
     }
     
     function enableEdit(e) {
-        var $element = $(e.target);
-        if (!$element.hasClass('editable')) return;
+        var element = e.target;
+        if (!element.classList.contains('editable')) return;
         
-        $element.attr('contenteditable', true);
-        $element.focus();
+        element.setAttribute('contenteditable', 'true');
+        element.focus();
         
         // Select all text
         var range = document.createRange();
-        range.selectNodeContents($element[0]);
+        range.selectNodeContents(element);
         var selection = window.getSelection();
         selection.removeAllRanges();
         selection.addRange(range);
     }
     
     function saveEdit(e) {
-        var $element = $(e.target);
-        $element.attr('contenteditable', false);
+        var element = e.target;
+        element.setAttribute('contenteditable', 'false');
         saveConfiguration();
     }
     
@@ -212,17 +257,20 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
             done: function(data) {
                 try {
                     var courses = JSON.parse(data.all_courses || '[]');
-                    var $container = $('[data-drop-zone="creation-courses"]');
-                    $container.empty();
+                    var container = document.querySelector('[data-drop-zone="creation-courses"]');
                     
-                    courses.forEach(function(course) {
-                        var courseHtml = `
-                            <div class="element" data-id="${course.id}" data-type="course" data-url="${course.url}" draggable="true">
-                                <a href="${course.url}" target="_blank">${course.fullname}</a>
-                            </div>
-                        `;
-                        $container.append(courseHtml);
-                    });
+                    if (container) {
+                        container.innerHTML = ''; // Clear container
+                        
+                        courses.forEach(function(course) {
+                            var courseHtml = `
+                                <div class="element" data-id="${course.id}" data-type="course" data-url="${course.url}" draggable="true">
+                                    <a href="${course.url}" target="_blank">${course.fullname}</a>
+                                </div>
+                            `;
+                            container.insertAdjacentHTML('beforeend', courseHtml);
+                        });
+                    }
                     
                     console.log(`✅ Loaded ${courses.length} courses`);
                 } catch (e) {
@@ -249,13 +297,15 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
         };
         
         // Save blocks
-        $('.block').each(function() {
-            var blockId = $(this).data('block');
+        const blocks = document.querySelectorAll('.block');
+        blocks.forEach(function(block) {
+            var blockId = block.dataset.block;
             config.blocks[blockId] = [];
             
             // Only collect direct children, not nested elements inside categories
-            $(this).find('.block-content > .element, .block-content > .category').each(function() {
-                var element = collectElementData(this);
+            const directChildren = block.querySelectorAll('.block-content > .element, .block-content > .category');
+            directChildren.forEach(function(child) {
+                var element = collectElementData(child);
                 if (element) {
                     config.blocks[blockId].push(element);
                 }
@@ -263,15 +313,17 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
         });
         
         // Save creation zone
-        $('[data-drop-zone^="creation-"]').each(function() {
-            var zone = $(this).data('drop-zone').replace('creation-', '');
-            config.creation[zone] = [];
+        const creationZones = document.querySelectorAll('[data-drop-zone^="creation-"]');
+        creationZones.forEach(function(zone) {
+            var zoneName = zone.dataset.dropZone.replace('creation-', '');
+            config.creation[zoneName] = [];
             
             // Only collect direct children, not nested elements inside categories
-            $(this).find('> .element, > .category').each(function() {
-                var element = collectElementData(this);
+            const directChildren = zone.querySelectorAll(':scope > .element, :scope > .category');
+            directChildren.forEach(function(child) {
+                var element = collectElementData(child);
                 if (element) {
-                    config.creation[zone].push(element);
+                    config.creation[zoneName].push(element);
                 }
             });
         });
@@ -290,28 +342,31 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
     }
     
     function collectElementData(element) {
-        var $el = $(element);
         var data = {
-            id: $el.data('id'),
-            type: $el.data('type')
+            id: element.dataset.id,
+            type: element.dataset.type
         };
         
         if (data.type === 'category') {
-            data.name = $el.find('.editable').text().trim();
+            const editableEl = element.querySelector('.editable');
+            data.name = editableEl ? editableEl.textContent.trim() : '';
             data.items = [];
             
-            $el.find('.category-items .element').each(function() {
-                var item = collectElementData(this);
-                if (item) {
-                    data.items.push(item);
+            const categoryItems = element.querySelectorAll('.category-items .element');
+            categoryItems.forEach(function(item) {
+                var itemData = collectElementData(item);
+                if (itemData) {
+                    data.items.push(itemData);
                 }
             });
         } else if (data.type === 'link') {
-            data.name = $el.find('.editable').text().trim();
-            data.url = $el.data('url');
+            const editableEl = element.querySelector('.editable');
+            data.name = editableEl ? editableEl.textContent.trim() : '';
+            data.url = element.dataset.url;
         } else if (data.type === 'course') {
-            data.name = $el.find('a').text().trim();
-            data.url = $el.data('url');
+            const linkEl = element.querySelector('a');
+            data.name = linkEl ? linkEl.textContent.trim() : '';
+            data.url = element.dataset.url;
         }
         
         return data;
@@ -344,36 +399,45 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
         console.log('🔄 Rebuilding from configuration');
         
         // Clear all dynamic content
-        $('.block-content').empty();
-        $('[data-drop-zone^="creation-categories"], [data-drop-zone^="creation-links"]').empty();
+        const blockContents = document.querySelectorAll('.block-content');
+        blockContents.forEach(el => el.innerHTML = '');
+        
+        const creationZones = document.querySelectorAll('[data-drop-zone^="creation-categories"], [data-drop-zone^="creation-links"]');
+        creationZones.forEach(el => el.innerHTML = '');
         
         // Rebuild blocks
         if (config.blocks) {
             Object.keys(config.blocks).forEach(function(blockId) {
-                var $blockContent = $(`[data-block="${blockId}"] .block-content`);
-                config.blocks[blockId].forEach(function(item) {
-                    var html = createElementHtml(item);
-                    $blockContent.append(html);
-                });
+                var blockContent = document.querySelector(`[data-block="${blockId}"] .block-content`);
+                if (blockContent) {
+                    config.blocks[blockId].forEach(function(item) {
+                        var html = createElementHtml(item);
+                        blockContent.insertAdjacentHTML('beforeend', html);
+                    });
+                }
             });
         }
         
         // Rebuild creation zone (except courses)
         if (config.creation) {
             if (config.creation.categories) {
-                var $container = $('[data-drop-zone="creation-categories"]');
-                config.creation.categories.forEach(function(item) {
-                    var html = createElementHtml(item);
-                    $container.append(html);
-                });
+                var container = document.querySelector('[data-drop-zone="creation-categories"]');
+                if (container) {
+                    config.creation.categories.forEach(function(item) {
+                        var html = createElementHtml(item);
+                        container.insertAdjacentHTML('beforeend', html);
+                    });
+                }
             }
             
             if (config.creation.links) {
-                var $container = $('[data-drop-zone="creation-links"]');
-                config.creation.links.forEach(function(item) {
-                    var html = createElementHtml(item);
-                    $container.append(html);
-                });
+                var container = document.querySelector('[data-drop-zone="creation-links"]');
+                if (container) {
+                    config.creation.links.forEach(function(item) {
+                        var html = createElementHtml(item);
+                        container.insertAdjacentHTML('beforeend', html);
+                    });
+                }
             }
         }
     }
