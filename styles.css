@@ -1,0 +1,188 @@
+/* Teacher Dashboard - Minimal Styles */
+
+/* Reset and base */
+#teacher-dashboard {
+    margin: 0;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+}
+
+/* Header */
+.header {
+    border: 1px solid #ccc;
+    padding: 15px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+}
+
+.controls button {
+    border: 1px solid #666;
+    background: white;
+    padding: 8px 15px;
+    cursor: pointer;
+}
+
+.controls button:hover {
+    background: #f0f0f0;
+}
+
+/* Creation Zone */
+.creation-zone {
+    border: 1px solid #ccc;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.creation-zone h2 {
+    margin: 0 0 15px 0;
+    font-size: 18px;
+}
+
+.sections {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.section {
+    border: 1px solid #ddd;
+    padding: 10px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.section h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+}
+
+.items {
+    min-height: 100px;
+    border: 1px dashed #bbb;
+    padding: 5px;
+}
+
+/* Blocks */
+.blocks {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+@media (max-width: 1200px) {
+    .blocks {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .blocks {
+        grid-template-columns: 1fr;
+    }
+    
+    .sections {
+        flex-direction: column;
+    }
+}
+
+.block {
+    border: 1px solid #ccc;
+    padding: 15px;
+    min-height: 300px;
+}
+
+.block h2 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 8px;
+}
+
+.block-content {
+    min-height: 250px;
+    border: 1px dashed #bbb;
+    padding: 5px;
+}
+
+/* Elements */
+.element {
+    border: 1px solid #999;
+    padding: 8px;
+    margin: 5px 0;
+    background: white;
+    cursor: move;
+}
+
+.element:hover {
+    border-color: #666;
+}
+
+.category {
+    border: 2px solid #666;
+    margin: 10px 0;
+}
+
+.category-header {
+    border-bottom: 1px solid #999;
+    padding: 8px;
+    background: #f8f8f8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.category-header h4 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.category-items {
+    padding: 10px;
+    min-height: 50px;
+    border: 2px dashed #007cba;
+    background-color: #f0f8ff;
+    margin: 5px 0;
+}
+
+.category-items:empty::after {
+    content: "🎯 Drop zone - place elements here";
+    color: #666;
+    font-style: italic;
+    font-size: 12px;
+}
+
+/* Drag states */
+.dragging {
+    opacity: 0.5;
+    border: 2px dashed #000 !important;
+}
+
+.drop-target {
+    border: 2px solid #000 !important;
+    background: #f0f0f0;
+}
+
+/* Editable */
+.editable {
+    background: #fff;
+    border: 1px solid #ccc;
+    padding: 2px 4px;
+    min-width: 100px;
+}
+
+.editable:focus {
+    outline: none;
+    border-color: #000;
+}

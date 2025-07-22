@@ -1,0 +1,22 @@
+# Temporary debugging files
+reset_config.php
+
+# Other git repositories
+Dashboard-Legacy/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backup files
+*~
+*.bak

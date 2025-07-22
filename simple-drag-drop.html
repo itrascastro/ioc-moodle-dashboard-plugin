@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Drag & Drop Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f7f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .dashboard-container {
+            max-width: 1400px;
+            margin: auto;
+        }
+        .controls {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .controls button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+        .main-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+        .available-items, .blocks-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .available-items h2, .blocks-container h2 {
+            margin-top: 0;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+        }
+        .blocks-wrapper {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            min-height: 300px;
+        }
+        .block h3 {
+            margin-top: 0;
+            font-size: 16px;
+        }
+        .item-list {
+            min-height: 50px;
+            padding: 5px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .category {
+            background-color: #e9ecef;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 5px;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #ced4da;
+        }
+        .category-header h4 {
+            margin: 0;
+            font-size: 14px;
+        }
+        .drag-handle {
+            cursor: move;
+            color: #6c757d;
+        }
+        .link {
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-top: 5px;
+            cursor: move;
+            font-size: 14px;
+        }
+        /* Drag and Drop States */
+        .dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+        .drag-over {
+            background-color: #d4edda !important; /* Greenish highlight */
+            border: 2px dashed #28a745 !important;
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <div class="controls">
+        <button id="create-category-btn">Crear Categoría</button>
+        <button id="create-link-btn">Crear Enlace</button>
+    </div>
+
+    <div class="main-layout">
+        <div id="available-items-area" class="available-items item-list">
+            <h2>Elementos Disponibles</h2>
+            <!-- New items will be added here -->
+        </div>
+
+        <div class="blocks-container">
+            <h2>Bloques de Contenido</h2>
+            <div class="blocks-wrapper">
+                <div class="block">
+                    <h3>Bloque 1</h3>
+                    <div class="item-list"></div>
+                </div>
+                <div class="block">
+                    <h3>Bloque 2</h3>
+                    <div class="item-list"></div>
+                </div>
+                <div class="block">
+                    <h3>Bloque 3</h3>
+                    <div class="item-list"></div>
+                </div>
+                <div class="block">
+                    <h3>Bloque 4</h3>
+                    <div class="item-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const createCategoryBtn = document.getElementById('create-category-btn');
+        const createLinkBtn = document.getElementById('create-link-btn');
+        const availableItemsArea = document.getElementById('available-items-area');
+        const dashboardContainer = document.querySelector('.dashboard-container');
+
+        let draggedElement = null;
+
+        // --- Element Creation ---
+        createCategoryBtn.addEventListener('click', () => {
+            const name = prompt('Introduce el nombre de la categoría:');
+            if (name) {
+                const category = createCategoryElement(name);
+                availableItemsArea.appendChild(category);
+            }
+        });
+
+        createLinkBtn.addEventListener('click', () => {
+            const name = prompt('Introduce el nombre del enlace:');
+            if (name) {
+                const url = prompt('Introduce la URL del enlace:', 'http://');
+                if (url) {
+                    const link = createLinkElement(name, url);
+                    availableItemsArea.appendChild(link);
+                }
+            }
+        });
+
+        function createCategoryElement(name) {
+            const id = 'cat-' + Date.now();
+            const category = document.createElement('div');
+            category.className = 'category';
+            category.setAttribute('data-id', id);
+            category.setAttribute('draggable', 'true');
+            category.innerHTML = `
+                <div class="category-header">
+                    <h4>${escapeHTML(name)}</h4>
+                    <span class="drag-handle">&#x22EE;</span>
+                </div>
+                <div class="item-list"></div>
+            `;
+            // Make only the handle draggable
+            const handle = category.querySelector('.drag-handle');
+            handle.addEventListener('mousedown', () => category.setAttribute('draggable', 'true'));
+            category.addEventListener('dragstart', (e) => {
+                if (e.target !== category) {
+                    e.preventDefault();
+                }
+            });
+            return category;
+        }
+
+        function createLinkElement(name, url) {
+            const id = 'link-' + Date.now();
+            const link = document.createElement('div');
+            link.className = 'link';
+            link.setAttribute('data-id', id);
+            link.setAttribute('draggable', 'true');
+            link.textContent = escapeHTML(name);
+            link.dataset.url = url; // Store URL for potential use
+            return link;
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        // --- Drag and Drop Logic (Event Delegation) ---
+        dashboardContainer.addEventListener('dragstart', (e) => {
+            if (e.target.matches('.link') || e.target.matches('.category')) {
+                draggedElement = e.target;
+                setTimeout(() => {
+                    e.target.classList.add('dragging');
+                }, 0);
+            }
+        });
+
+        dashboardContainer.addEventListener('dragend', (e) => {
+            if (draggedElement) {
+                draggedElement.classList.remove('dragging');
+                draggedElement = null;
+            }
+        });
+
+        dashboardContainer.addEventListener('dragover', (e) => {
+            e.preventDefault(); // Necessary to allow dropping
+            const dropTarget = getDropTarget(e.target);
+            
+            if (dropTarget) {
+                // Clear previous highlights
+                document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                
+                const isCategory = draggedElement.classList.contains('category');
+                // Rules:
+                // 1. Links can go in any item-list.
+                // 2. Categories can only go in item-lists that are direct children of blocks or the available area.
+                if (!isCategory && dropTarget.classList.contains('item-list')) {
+                    dropTarget.classList.add('drag-over');
+                } else if (isCategory && dropTarget.classList.contains('item-list') && !dropTarget.closest('.category')) {
+                     dropTarget.classList.add('drag-over');
+                }
+            }
+        });
+        
+        dashboardContainer.addEventListener('dragleave', (e) => {
+            if (e.target.classList && e.target.classList.contains('drag-over')) {
+                e.target.classList.remove('drag-over');
+            }
+        });
+
+        dashboardContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const dropTarget = getDropTarget(e.target);
+            
+            if (dropTarget && dropTarget.classList.contains('drag-over')) {
+                dropTarget.appendChild(draggedElement);
+            }
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        });
+
+        function getDropTarget(element) {
+            return element.closest('.item-list');
+        }
+    });
+</script>
+
+</body>
+</html>
