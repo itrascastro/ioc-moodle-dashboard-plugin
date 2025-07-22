@@ -1,6 +1,9 @@
 # Temporary debugging files
 reset_config.php
 
+# Development resources (not for production)
+dev-resources/
+
 # Other git repositories
 Dashboard-Legacy/
 
