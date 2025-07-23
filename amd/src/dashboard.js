@@ -3,7 +3,243 @@ define(['core/ajax'], function(Ajax) {
     
     var initialized = false;
     var draggedElement = null;
-    var config = { blocks: {}, creation: { courses: [], categories: [], links: [] } };
+    
+    // ==================== DOMAIN OBJECTS ====================
+    
+    // Base Container class - eliminates code duplication
+    class Container {
+        constructor(id, type, acceptedTypes = []) {
+            this.id = id;
+            this.type = type;
+            this.acceptedTypes = acceptedTypes;
+            this.elements = [];
+            this.parentContainer = null;
+        }
+        
+        canAccept(element) {
+            return element && this.acceptedTypes.includes(element.type);
+        }
+        
+        addElement(element) {
+            if (!this.canAccept(element)) {
+                console.warn(`${this.type} cannot accept ${element ? element.type : 'null'} elements`);
+                return false;
+            }
+            element.parentContainer = this;
+            this.elements.push(element);
+            return true;
+        }
+        
+        removeElement(elementId) {
+            const index = this.elements.findIndex(el => el.id === elementId);
+            if (index >= 0) {
+                const removed = this.elements.splice(index, 1)[0];
+                if (removed) removed.parentContainer = null;
+                return true;
+            }
+            return false;
+        }
+        
+        setElements(elements) {
+            this.elements = elements;
+            elements.forEach(el => el.parentContainer = this);
+        }
+        
+        findElement(elementId) {
+            for (let element of this.elements) {
+                if (element.id === elementId) return element;
+                // If element is also a container, search recursively
+                if (element.elements && typeof element.findElement === 'function') {
+                    const found = element.findElement(elementId);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+    }
+    
+    class Dashboard {
+        constructor(id = 'main', userid = null) {
+            this.id = id;
+            this.userid = userid;
+            this.blocks = [
+                new Block('1'), new Block('2'),
+                new Block('3'), new Block('4')
+            ];
+            this.creationZone = new CreationZone();
+            this.createdAt = new Date();
+            this.updatedAt = new Date();
+        }
+        
+        findElement(elementId) {
+            // Search in blocks using Container's findElement
+            for (let block of this.blocks) {
+                const found = block.findElement(elementId);
+                if (found) return found;
+            }
+            
+            // Search in creation zone
+            const zones = [
+                this.creationZone.zones.categories,
+                this.creationZone.zones.links,
+                this.creationZone.zones.courses
+            ];
+            
+            for (let zone of zones) {
+                const found = zone.findElement(elementId);
+                if (found) return found;
+            }
+            
+            return null;
+        }
+        
+        findContainer(containerId) {
+            // Check blocks
+            for (let block of this.blocks) {
+                if (block.id === containerId || block.originalId === containerId) return block;
+                for (let category of block.elements) {
+                    if (category.id === containerId || `category-${category.originalId}` === containerId) return category;
+                }
+            }
+            
+            // Check creation zone
+            if (this.creationZone.hasContainer(containerId)) {
+                return this.creationZone.getContainer(containerId);
+            }
+            
+            return null;
+        }
+    }
+    
+    class Block extends Container {
+        constructor(id) {
+            // Block is a Container that accepts categories
+            super(`block-${id}`, 'block', ['category']);
+            
+            // Block-specific properties
+            this.originalId = id;  // Keep original ID for compatibility
+            this.name = `Block ${id}`;
+        }
+        
+        // Backward compatibility methods
+        get categories() {
+            return this.elements;
+        }
+        
+        addCategory(category) {
+            return this.addElement(category);
+        }
+        
+        removeCategory(categoryId) {
+            return this.removeElement(categoryId);
+        }
+    }
+    
+    class Category extends Container {
+        constructor(id, name) {
+            // Category is a Container that accepts courses and links
+            super(`category-${id}`, 'category', ['course', 'link']);
+            
+            // Category-specific properties
+            this.originalId = id;  // Keep original ID for compatibility
+            this.name = name;
+            this.description = '';
+            this.createdAt = new Date();
+            this.updatedAt = new Date();
+        }
+        
+        getLocation() {
+            if (this.parentContainer && this.parentContainer.type === 'block') {
+                return {
+                    type: 'block',
+                    blockId: this.parentContainer.id,
+                    blockName: this.parentContainer.name
+                };
+            }
+            return { type: 'creation-zone' };
+        }
+    }
+    
+    class Course {
+        constructor(moodleData) {
+            this.id = moodleData.id;
+            this.moodleId = moodleData.id;
+            this.fullname = moodleData.fullname;
+            this.shortname = moodleData.shortname || '';
+            this.url = moodleData.url;
+            this.summary = moodleData.summary || '';
+            this.type = 'course';
+            this.parentContainer = null;
+        }
+        
+        canMoveTo(container) {
+            return container && (container.type === 'creation-zone' || container.type === 'category');
+        }
+        
+        getBlockLocation() {
+            if (this.parentContainer && this.parentContainer.type === 'category') {
+                return this.parentContainer.getLocation();
+            }
+            return null;
+        }
+    }
+    
+    class Link {
+        constructor(id, name, url) {
+            this.id = id;
+            this.name = name;
+            this.url = url;
+            this.description = '';
+            this.type = 'link';
+            this.parentContainer = null;
+            this.createdAt = new Date();
+            this.updatedAt = new Date();
+        }
+        
+        canMoveTo(container) {
+            return container && (container.type === 'creation-zone' || container.type === 'category');
+        }
+        
+        getBlockLocation() {
+            if (this.parentContainer && this.parentContainer.type === 'category') {
+                return this.parentContainer.getLocation();
+            }
+            return null;
+        }
+    }
+    
+    class CreationZone {
+        constructor() {
+            this.id = 'creation-zone';
+            this.type = 'creation-zone';
+            this.zones = {
+                courses: new Container('creation-courses', 'creation-zone', ['course']),
+                categories: new Container('creation-categories', 'creation-zone', ['category']),
+                links: new Container('creation-links', 'creation-zone', ['link'])
+            };
+        }
+        
+        hasContainer(containerId) {
+            return containerId === 'creation-courses' ||
+                   containerId === 'creation-categories' ||
+                   containerId === 'creation-links';
+        }
+        
+        getContainer(containerId) {
+            switch(containerId) {
+                case 'creation-courses': return this.zones.courses;
+                case 'creation-categories': return this.zones.categories;
+                case 'creation-links': return this.zones.links;
+                default: return null;
+            }
+        }
+    }
+    
+    
+    // ==================== GLOBAL STATE ====================
+    
+    var dashboard = null;
+    var config = { blocks: {}, creation: { courses: [], categories: [], links: [] } }; // Legacy compatibility
     
     // Helper function for safe element matching
     function elementMatches(element, selector) {
@@ -17,7 +253,10 @@ define(['core/ajax'], function(Ajax) {
         if (initialized) return;
         initialized = true;
         
-        console.log('🚀 Initializing dashboard (vanilla JS)');
+        console.log('🚀 Initializing dashboard (Container Architecture)');
+        
+        // Create dashboard instance
+        dashboard = new Dashboard('main');
         
         setupEventHandlers();
         setupDragAndDrop();
@@ -198,14 +437,22 @@ define(['core/ajax'], function(Ajax) {
         var name = prompt('Nom de la categoria:');
         if (!name) return;
         
-        var id = 'cat-' + Date.now();
+        var originalId = 'cat-' + Date.now();
+        
+        // Create Category domain object (it will have id "category-cat-timestamp")
+        var category = new Category(originalId, name);
+        
+        // Add to dashboard creation zone
+        dashboard.creationZone.zones.categories.addElement(category);
+        
+        // Render in UI (maintain compatibility) - use the full category.id
         var categoryHtml = `
-            <div class="category element" data-id="${id}" data-type="category" draggable="true">
+            <div class="category element" data-id="${category.id}" data-type="category" draggable="true">
                 <div class="category-header">
                     <h4 class="editable">${name}</h4>
                     <button onclick="this.parentElement.parentElement.remove(); saveConfiguration()">×</button>
                 </div>
-                <div class="category-items" data-drop-zone="category-${id}"></div>
+                <div class="category-items" data-drop-zone="${category.id}"></div>
             </div>
         `;
         
@@ -225,6 +472,14 @@ define(['core/ajax'], function(Ajax) {
         if (!url) return;
         
         var id = 'link-' + Date.now();
+        
+        // Create Link domain object
+        var link = new Link(id, name, url);
+        
+        // Add to dashboard creation zone
+        dashboard.creationZone.zones.links.addElement(link);
+        
+        // Render in UI (maintain compatibility)
         var linkHtml = `
             <div class="element" data-id="${id}" data-type="link" data-url="${url}" draggable="true">
                 <span class="editable">${name}</span>
@@ -269,9 +524,16 @@ define(['core/ajax'], function(Ajax) {
             args: {},
             done: function(data) {
                 try {
-                    var courses = JSON.parse(data.all_courses || '[]');
-                    var container = document.querySelector('[data-drop-zone="creation-courses"]');
+                    var coursesData = JSON.parse(data.all_courses || '[]');
                     
+                    // Create Course domain objects
+                    var courses = coursesData.map(courseData => new Course(courseData));
+                    
+                    // Add to dashboard creation zone
+                    dashboard.creationZone.zones.courses.setElements(courses);
+                    
+                    // Render in UI (maintain compatibility)
+                    var container = document.querySelector('[data-drop-zone="creation-courses"]');
                     if (container) {
                         container.innerHTML = ''; // Clear container
                         
