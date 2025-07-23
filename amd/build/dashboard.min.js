@@ -168,14 +168,27 @@ define(['core/ajax'], function(Ajax) {
         
         console.log('🔍 Validating drop:', elementType, 'to zone:', targetZone);
         
-        // Elements (courses, links) can go to any drop zone
-        if (elementType === 'element') {
-            return !!targetZone; // Any zone with data-drop-zone is valid
-        }
-        
         // Categories can only go to block zones or creation-categories zone
         if (elementType === 'category') {
             return targetZone && (targetZone.startsWith('block-') || targetZone === 'creation-categories');
+        }
+        
+        // Elements (courses, links) have specific restrictions
+        if (elementType === 'element') {
+            var elementDataType = element.dataset.type;
+            
+            // Courses can only go to creation-courses or inside categories
+            if (elementDataType === 'course') {
+                return targetZone === 'creation-courses' || targetZone.startsWith('category-');
+            }
+            
+            // Links can only go to creation-links or inside categories  
+            if (elementDataType === 'link') {
+                return targetZone === 'creation-links' || targetZone.startsWith('category-');
+            }
+            
+            // Fallback for other element types
+            return !!targetZone;
         }
         
         return false;
